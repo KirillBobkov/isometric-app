@@ -44,11 +44,15 @@ function formatSeconds(seconds: number) {
 export const App: React.FC = () => {
   const [subscription, setSubscription] = useState<Subscription | undefined>(undefined);
   const [counterSub, setCounterSub] = useState<Subscription | undefined>(undefined);
-  const [trainingData, setTrainingData] = useState<number[]>([]);
-
   const [currentValue, setCurrentValue] = useState<number | undefined>(undefined);
+  const connected = !getStatus();
 
-  const connected = getStatus();
+  const [usualTrainingStarted, setUsualTrainingStarted] = useState<boolean>(false);
+  const [maxTrainingStarted, setMaxTrainingStarted] = useState<boolean>(false);
+
+  const [usualTrainingData, setUsualTrainingData] = useState<number[]>([]);
+  const [maxTrainingData, setMaxTrainingData] = useState<number[]>([]);
+
 
   const [value, setValue] = React.useState(1);
 
@@ -73,7 +77,14 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     if (currentValue !== undefined) {
-      setTrainingData((prevData) => (prevData.length >= 20 ? [...prevData.slice(1), currentValue] : [...prevData, currentValue]));
+
+      if (usualTrainingStarted) {
+        setUsualTrainingData((prevData) => (prevData.length >= 20 ? [...prevData.slice(1), currentValue] : [...prevData, currentValue]));
+      }
+    
+      if (maxTrainingStarted) {
+        setMaxTrainingData((prevData) => (prevData.length >= 20 ? [...prevData.slice(1), currentValue] : [...prevData, currentValue]));
+      }
     }
   }, [currentValue]);
 
@@ -166,26 +177,33 @@ export const App: React.FC = () => {
           {value === 1 ? (
             <>
               <div className={styles.charts}>
-                <ChartComponent title="График для обычной тренировки" data={trainingData.map((v) => v)} />
+                <ChartComponent title="График для обычной тренировки" data={usualTrainingData.map((v) => v)} />
               </div>
               <div style={{ marginTop: "30px" }}></div>
               <div className={styles.buttons}>
-                <Button disabled={!connected} variant="contained" style={{ borderRadius: 30, backgroundColor: "#65ceff" }}       sx={{
-          "&.Mui-disabled": {
-            opacity: 0.3
-          },
-        }} onClick={() => {}}>
+                <Button
+                disabled={!connected || maxTrainingStarted || usualTrainingStarted}
+                  variant="contained"
+                  style={{ borderRadius: 30, backgroundColor: "#65ceff" }}
+                  sx={{
+                    "&.Mui-disabled": {
+                      opacity: 0.3,
+                    },
+                  }}
+                  onClick={() => { setUsualTrainingStarted(true);  }}
+                >
                   Старт
                 </Button>
                 <Button
-                  disabled={!connected}
+                  disabled={!connected || maxTrainingStarted ||  !usualTrainingStarted}
                   variant="outlined"
-                  style={{ borderRadius: 30, borderColor: "#65ceff", color: "#65ceff" }}       sx={{
+                  style={{ borderRadius: 30, borderColor: "#65ceff", color: "#65ceff" }}
+                  sx={{
                     "&.Mui-disabled": {
-                      opacity: 0.3
+                      opacity: 0.3,
                     },
-                  }} 
-                  onClick={() => {}}
+                  }}
+                  onClick={() => { setUsualTrainingStarted(false);  }}
                 >
                   Стоп
                 </Button>
@@ -196,27 +214,33 @@ export const App: React.FC = () => {
           {value === 2 ? (
             <>
               <div className={styles.charts}>
-                <ChartComponent title="График для определения максимума" data={trainingData.map((v) => v)} />
+                <ChartComponent title="График для определения максимума" data={maxTrainingData.map((v) => v)} />
               </div>
               <div style={{ marginTop: "30px" }}></div>
               <div className={styles.buttons}>
-                <Button disabled={!connected} variant="contained" style={{ borderRadius: 30, backgroundColor: "#65ceff" }}       sx={{
-          "&.Mui-disabled": {
-            opacity: 0.3
-          },
-        }} onClick={() => {}}>
+                <Button
+                  disabled={!connected || usualTrainingStarted || maxTrainingStarted}
+                  variant="contained"
+                  style={{ borderRadius: 30, backgroundColor: "#65ceff" }}
+                  sx={{
+                    "&.Mui-disabled": {
+                      opacity: 0.3,
+                    },
+                  }}
+                  onClick={() => { setMaxTrainingStarted(true); }}
+                >
                   Старт
                 </Button>
                 <Button
-                  disabled={!connected}
+                  disabled={!connected || usualTrainingStarted || !maxTrainingStarted}
                   variant="outlined"
                   style={{ borderRadius: 30, borderColor: "#65ceff", color: "#65ceff" }}
                   sx={{
                     "&.Mui-disabled": {
-                      opacity: 0.3
+                      opacity: 0.3,
                     },
                   }}
-                  onClick={() => {}}
+                  onClick={() => { setMaxTrainingStarted(false); }}
                 >
                   Стоп
                 </Button>
@@ -270,11 +294,17 @@ const SaveData = ({ connected }: any) => (
     </div>
     <div style={{ marginTop: "30px" }}></div>
     <div className={styles.buttons} style={{ flexDirection: "column" }}>
-      <Button disabled={!connected} variant="contained" style={{ borderRadius: 30, backgroundColor: "#65ceff" }}       sx={{
+      <Button
+        disabled={!connected}
+        variant="contained"
+        style={{ borderRadius: 30, backgroundColor: "#65ceff" }}
+        sx={{
           "&.Mui-disabled": {
-            opacity: 0.3
+            opacity: 0.3,
           },
-        }} onClick={() => {}}>
+        }}
+        onClick={() => {}}
+      >
         Скачать данные
       </Button>
       <Button
@@ -283,7 +313,7 @@ const SaveData = ({ connected }: any) => (
         style={{ borderRadius: 30, borderColor: "#65ceff", color: "#65ceff" }}
         sx={{
           "&.Mui-disabled": {
-            opacity: 0.3
+            opacity: 0.3,
           },
         }}
         onClick={() => {}}

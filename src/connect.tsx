@@ -1,4 +1,4 @@
-import { from, fromEvent } from "rxjs";
+import { from, fromEvent, interval } from "rxjs";
 import { map, switchMap, tap } from "rxjs/operators";
 
 const serviceUUID = 0xffe0;
@@ -11,6 +11,8 @@ export function connect() {
   console.log("Запрос погнал");
 
 
+  return interval(1000);
+  
   const device$ = from(
       // @ts-ignore
     navigator.bluetooth.requestDevice({
