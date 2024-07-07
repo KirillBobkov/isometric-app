@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import styles from "./App.module.css";
 import { Button, IconButton, ThemeProvider, Tooltip, createTheme } from "@mui/material";
 import { LineChart } from "@mui/x-charts/LineChart";
@@ -15,80 +15,81 @@ import avatar from "./avatar.png";
 import Tabs from "@mui/material/Tabs";
 import Tab from "@mui/material/Tab";
 import Box from "@mui/material/Box";
+import { Howl, Howler } from "howler";
+import axios from "axios";
 
-const INITIAL_COUNT = 0;
-
-// Функция для создания Observable счётчика
-export function createCounterObservable() {
-  // Создаём поток интервалов, который будет увеличивать значение счётчика каждую секунду
-  const counter$ = interval(1000).pipe(
-    // Используем scan для накопления значений
-    scan((acc, _) => acc + 1),
-    // Начинаем с начального значения
-    startWith(INITIAL_COUNT)
-  );
-
-  return counter$;
-}
-
-function formatSeconds(seconds: number) {
-  const hours = Math.floor(seconds / 3600); // Часы
-  seconds %= 3600; // Остаток от деления на 3600 (минуты)
-
-  const minutes = Math.floor(seconds / 60); // Минуты
-  seconds %= 60; // Секунды
-
-  return `${("0" + hours).slice(-2)}:${("0" + minutes).slice(-2)}:${("0" + seconds).slice(-2)}`;
-}
-
-export const App: React.FC = () => {
+export const App = () => {
+  const [connected, setConnected] = useState(true);
+  const [trainingInProgress, setTrainingInProgress] = useState(""); // usual or max
+  const [trainingMode, setTrainingMode] = useState("usual"); // usual or max
+  const [usualData, setUsualData] = useState<number[]>([]);
+  const [maxData, setMaxData] = useState<number[]>([]);
+  const [lastValueFromBluetooth, setLastValueFromBluetooth] = useState(0);
   const [subscription, setSubscription] = useState<Subscription | undefined>(undefined);
-  const [counterSub, setCounterSub] = useState<Subscription | undefined>(undefined);
-  const [currentValue, setCurrentValue] = useState<number | undefined>(undefined);
-  const connected = !getStatus();
 
-  const [usualTrainingStarted, setUsualTrainingStarted] = useState<boolean>(false);
-  const [maxTrainingStarted, setMaxTrainingStarted] = useState<boolean>(false);
+  const gaugeRef = React.useRef(null);
 
-  const [usualTrainingData, setUsualTrainingData] = useState<number[]>([]);
-  const [maxTrainingData, setMaxTrainingData] = useState<number[]>([]);
-
-
-  const [value, setValue] = React.useState(1);
-
-  const handleChangeTab = (event: React.SyntheticEvent, newValue: number) => {
-    setValue(newValue);
-  };
-
-  const handleConnect = useCallback(() => {
-    const newSubscription = connect().subscribe((value: any) => {
-      setCurrentValue(+value || 0);
+  const onConnect = useCallback(() => {
+    // @ts-ignore
+    const newSubscription: Subscription = connect().subscribe((value: any) => {
+      setLastValueFromBluetooth(value);
     });
     setSubscription(newSubscription);
-  }, [connected]);
+  }, []);
 
-  const handleDisconnect = useCallback(() => {
+  const onDisconnect = useCallback(() => {
     disconnect();
     subscription?.unsubscribe();
-    setSubscription(undefined);
-    counterSub?.unsubscribe();
-    setCounterSub(undefined);
-  }, [subscription, counterSub]);
+    setTrainingInProgress("");
+    // ??
+    setUsualData([]);
+    setMaxData([]);
+
+    setLastValueFromBluetooth(0);
+  }, [subscription]);
 
   useEffect(() => {
-    if (currentValue !== undefined) {
-
-      if (usualTrainingStarted) {
-        setUsualTrainingData((prevData) => (prevData.length >= 20 ? [...prevData.slice(1), currentValue] : [...prevData, currentValue]));
-      }
-    
-      if (maxTrainingStarted) {
-        setMaxTrainingData((prevData) => (prevData.length >= 20 ? [...prevData.slice(1), currentValue] : [...prevData, currentValue]));
+    if (lastValueFromBluetooth) {
+      if (trainingInProgress === "usual") {
+        setUsualData((prev) => [...prev.slice(-20), lastValueFromBluetooth]);
+      } else if (trainingInProgress === "max") {
+        setMaxData((prev) => [...prev.slice(-20), lastValueFromBluetooth]);
       }
     }
-  }, [currentValue]);
+  }, [lastValueFromBluetooth, trainingMode, trainingInProgress]);
+
+  useEffect(() => {
+    if (connected) {
+      onConnect();
+    } else {
+      onDisconnect();
+    }
+  }, [connected]);
+
+  const onChangeTrainingMode = (event: any, newValue: string) => {
+    console.log(newValue);
+    setTrainingMode(newValue);
+  };
+
+  const startTraining = async () => {
+    setTrainingInProgress(trainingMode);
+    const sound = new Howl({
+      src: [require(`./sounds/${trainingMode === 'usual' ? 'usual_started.mp3' : 'max_started.mp3'}`)],
+    });
+    sound.play();
+  };
+
+  const stopTraining = () => {
+    setTrainingInProgress("");
+
+    const sound = new Howl({
+      src: [require("./sounds/finish.mp3")],
+    });
+    sound.play();
+  };
 
   const newTheme = createTheme({ palette: { mode: "dark" } });
+
   return (
     <ThemeProvider theme={newTheme}>
       <div className={styles.layout}>
@@ -96,10 +97,10 @@ export const App: React.FC = () => {
           <div className={styles.title} style={{ width: "100%" }}>
             Изометрический тренажёр
           </div>
-          <div style={{ marginTop: "30px" }}></div>
+
           <div className={styles.container_buttons}>
             <h1 className={styles.secondary_title}>
-              Управление Bluetooth{" "}
+              Управление Bluetooth
               <Tooltip title="Самый первый шаг - подключить устройство. Далее уже можно выбирать режим тренировки. Если тренажёр не подключен, то режимы тренировки недоступны">
                 <IconButton>
                   <InfoRoundedIcon />
@@ -119,10 +120,10 @@ export const App: React.FC = () => {
               </h1>
             )}
             <div className={styles.buttons}>
-              <Button variant="contained" style={{ borderRadius: 30, backgroundColor: "#65ceff" }} onClick={handleConnect}>
+              <Button variant="contained" style={{ borderRadius: 30, backgroundColor: "#65ceff" }} onClick={onConnect}>
                 Подключить
               </Button>
-              <Button variant="outlined" style={{ borderRadius: 30, borderColor: "#65ceff", color: "#65ceff" }} onClick={handleDisconnect}>
+              <Button variant="outlined" style={{ borderRadius: 30, borderColor: "#65ceff", color: "#65ceff" }} onClick={onDisconnect}>
                 Отключить
               </Button>
             </div>
@@ -131,8 +132,8 @@ export const App: React.FC = () => {
         <div className={`${styles.column} ${styles.columnCenter}`}>
           <Box style={{ marginBottom: 30 }} sx={{ width: "100%" }}>
             <Tabs
-              value={value}
-              onChange={handleChangeTab}
+              value={trainingMode}
+              onChange={onChangeTrainingMode}
               textColor="secondary"
               indicatorColor="secondary"
               aria-label="secondary tabs example"
@@ -154,7 +155,7 @@ export const App: React.FC = () => {
                     backgroundColor: "#65ceff",
                   },
                 }}
-                value={1}
+                value={"usual"}
                 label="Режим обычной тренировки"
               />
               <Tab
@@ -168,21 +169,21 @@ export const App: React.FC = () => {
                     backgroundColor: "#65ceff",
                   },
                 }}
-                value={2}
+                value={"max"}
                 label="Режим определения максимума"
               />
             </Tabs>
           </Box>
 
-          {value === 1 ? (
+          {trainingMode === "usual" ? (
             <>
               <div className={styles.charts}>
-                <ChartComponent title="График для обычной тренировки" data={usualTrainingData.map((v) => v)} />
+                <ChartComponent title="График для обычной тренировки" data={usualData.map((v) => v)} />
               </div>
               <div style={{ marginTop: "30px" }}></div>
               <div className={styles.buttons}>
                 <Button
-                disabled={!connected || maxTrainingStarted || usualTrainingStarted}
+                  disabled={!connected || trainingInProgress === "max" || trainingInProgress === "usual"}
                   variant="contained"
                   style={{ borderRadius: 30, backgroundColor: "#65ceff" }}
                   sx={{
@@ -190,12 +191,14 @@ export const App: React.FC = () => {
                       opacity: 0.3,
                     },
                   }}
-                  onClick={() => { setUsualTrainingStarted(true);  }}
+                  onClick={() => {
+                    startTraining();
+                  }}
                 >
                   Старт
                 </Button>
                 <Button
-                  disabled={!connected || maxTrainingStarted ||  !usualTrainingStarted}
+                  disabled={!connected || trainingInProgress !== "usual"}
                   variant="outlined"
                   style={{ borderRadius: 30, borderColor: "#65ceff", color: "#65ceff" }}
                   sx={{
@@ -203,7 +206,9 @@ export const App: React.FC = () => {
                       opacity: 0.3,
                     },
                   }}
-                  onClick={() => { setUsualTrainingStarted(false);  }}
+                  onClick={() => {
+                    stopTraining();
+                  }}
                 >
                   Стоп
                 </Button>
@@ -211,15 +216,15 @@ export const App: React.FC = () => {
             </>
           ) : null}
 
-          {value === 2 ? (
+          {trainingMode === "max" ? (
             <>
               <div className={styles.charts}>
-                <ChartComponent title="График для определения максимума" data={maxTrainingData.map((v) => v)} />
+                <ChartComponent title="График для определения максимума" data={maxData.map((v) => v)} />
               </div>
               <div style={{ marginTop: "30px" }}></div>
               <div className={styles.buttons}>
                 <Button
-                  disabled={!connected || usualTrainingStarted || maxTrainingStarted}
+                  disabled={!connected || trainingInProgress === "max" || trainingInProgress === "usual"}
                   variant="contained"
                   style={{ borderRadius: 30, backgroundColor: "#65ceff" }}
                   sx={{
@@ -227,12 +232,14 @@ export const App: React.FC = () => {
                       opacity: 0.3,
                     },
                   }}
-                  onClick={() => { setMaxTrainingStarted(true); }}
+                  onClick={() => {
+                    startTraining();
+                  }}
                 >
                   Старт
                 </Button>
                 <Button
-                  disabled={!connected || usualTrainingStarted || !maxTrainingStarted}
+                  disabled={!connected || trainingInProgress !== "max"}
                   variant="outlined"
                   style={{ borderRadius: 30, borderColor: "#65ceff", color: "#65ceff" }}
                   sx={{
@@ -240,7 +247,9 @@ export const App: React.FC = () => {
                       opacity: 0.3,
                     },
                   }}
-                  onClick={() => { setMaxTrainingStarted(false); }}
+                  onClick={() => {
+                    stopTraining();
+                  }}
                 >
                   Стоп
                 </Button>
