@@ -268,6 +268,7 @@ interface ChartComponentProps {
   title: string;
   data: number[];
 }
+
 const ChartComponent: React.FC<ChartComponentProps> = ({ title, data }) => (
   <div className={styles.container_chart}>
     <h1 className={styles.secondary_title}>{title}</h1>
